@@ -12,6 +12,9 @@ A working AI voice sales bot that conducts real voice conversations, shows live 
 - Call history with recordings, summaries, transcripts, statuses (stored in browser IndexedDB)
 - Configurable product, language (English/Hindi/Telugu), voice, LLM endpoint
 
+## Live Demo
+https://avinash-as.github.io/voice_bot/
+
 ## Run locally
 1. `cd sales-bot`
 2. `python -m http.server 8080`  (or any static server)
