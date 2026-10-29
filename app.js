@@ -1,12 +1,12 @@
 // ---------- State ----------
 const DEFAULT_PRODUCT = {
-  name: "CloudSync Pro",
-  description: "A cloud-based SaaS platform for team collaboration, file sync, and project management with real-time updates, version control, and enterprise-grade security.",
-  price: "$29/user/month (14-day free trial, no credit card required)"
+  name: "BizFlow CRM",
+  description: "A cloud-based CRM for small businesses: lead & contact management, sales pipeline, invoicing, WhatsApp & email integration, task automation, and real-time analytics dashboards.",
+  price: "₹999/month (14-day free trial, no credit card required)"
 };
 const DEFAULT_SETTINGS = {
   product: { ...DEFAULT_PRODUCT },
-  language: "en-US",
+  language: "bilingual",
   voiceURI: "",
   llmEndpoint: "https://text.pollinations.ai/openai",
   llmModel: "gpt-oss-20b",
@@ -94,7 +94,16 @@ function parseJSON(text) {
   if (m) { try { return JSON.parse(m[0]); } catch(e) {} }
   return null;
 }
-function langCode() { return settings.language; }
+function recognitionLang() {
+  if (settings.language === "bilingual") return "hi-IN";
+  return settings.language;
+}
+function langCode() { return recognitionLang(); }
+function hasHindi(text) { return /[\u0900-\u097F]/.test(text || ""); }
+function ttsLangFor(text) {
+  if (settings.language === "bilingual") return hasHindi(text) ? "hi-IN" : "en-IN";
+  return settings.language;
+}
 
 // ---------- LLM ----------
 async function llmChat(messages) {
@@ -121,22 +130,23 @@ function getVoices() {
   });
 }
 
-function pickVoice() {
+function pickVoice(text) {
   const voices = speechSynthesis.getVoices();
   if (settings.voiceURI) {
     const v = voices.find(v => v.voiceURI === settings.voiceURI);
     if (v) return v;
   }
-  const lang = settings.language;
-  return voices.find(v => v.lang === lang) || voices.find(v => v.lang.startsWith(lang.split("-")[0])) || voices[0];
+  const lang = ttsLangFor(text);
+  const primary = lang.split("-")[0];
+  return voices.find(v => v.lang === lang) || voices.find(v => v.lang.startsWith(primary)) || voices.find(v => v.lang.startsWith("en")) || voices[0];
 }
 
 function speak(text) {
   return new Promise((resolve) => {
     if (!text) return resolve();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = settings.language;
-    const v = pickVoice();
+    u.lang = ttsLangFor(text);
+    const v = pickVoice(text);
     if (v) u.voice = v;
     u.rate = 1.0;
     u.pitch = 1.0;
@@ -277,12 +287,17 @@ async function doStartCall() {
 }
 
 function buildSystemPrompt() {
+  const langRule = settings.language === "bilingual"
+    ? "Detect the language the customer is using (Hindi or English) and reply in that SAME language. You may mix (Hinglish) only if the customer does."
+    : settings.language === "en-US" ? "Reply in English."
+    : settings.language === "hi-IN" ? "Reply in Hindi."
+    : "Reply in Telugu.";
   return `You are a friendly, professional sales representative for ${settings.product.name}.
 Product description: ${settings.product.description}
 Pricing: ${settings.product.price}
 Your goal: understand the customer's needs, answer questions accurately, handle objections, and guide them toward conversion (purchase) or a product demo.
 Rules:
-- Reply in ${settings.language === "en-US" ? "English" : settings.language === "hi-IN" ? "Hindi" : "Telugu"}.
+- ${langRule}
 - Keep replies concise (2-3 sentences) and ask one question at a time.
 - Be helpful, not pushy. Acknowledge concerns.
 - If the customer wants to buy, guide them to signup/payment. If unsure, offer a demo.
@@ -304,7 +319,7 @@ function startListening() {
     return;
   }
   recognition = new SpeechRecognition();
-  recognition.lang = settings.language;
+  recognition.lang = recognitionLang();
   recognition.continuous = false;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
@@ -521,7 +536,8 @@ function populateVoices() {
   getVoices().then((voices) => {
     const sel = $("sVoice");
     sel.innerHTML = "";
-    const filtered = voices.filter(v => v.lang.startsWith(settings.language.split("-")[0]));
+    const base = settings.language === "bilingual" ? "hi" : settings.language.split("-")[0];
+    const filtered = voices.filter(v => v.lang.startsWith(base));
     const list = filtered.length ? filtered : voices;
     list.forEach(v => {
       const opt = document.createElement("option");
